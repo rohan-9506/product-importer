@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..models import ImportJob
-from ..tasks.import_csv import import_products_job
+# from ..tasks.import_csv import import_products_job
 
 uploads_bp = Blueprint("uploads", __name__)
 
