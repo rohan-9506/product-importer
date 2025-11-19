@@ -8,13 +8,14 @@ from .celery_app import celery, make_celery
 
 
 def create_app(config_name: str | None = None) -> Flask:
-    """
-    Application factory for Flask.
-    """
     load_dotenv()
     app = Flask(__name__)
     configuration = get_config(config_name)
     app.config.from_object(configuration)
+
+    # Force eager mode for your free Render deployment
+    app.config["CELERY_TASK_ALWAYS_EAGER"] = True
+    app.config["CELERY_TASK_EAGER_PROPAGATES"] = True
 
     _register_extensions(app)
     register_blueprints(app)
