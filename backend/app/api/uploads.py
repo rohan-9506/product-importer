@@ -8,6 +8,7 @@ from ..extensions import db
 from ..models import ImportJob
 from ..tasks.import_csv import import_products_job
 
+
 uploads_bp = Blueprint("uploads", __name__)
 
 
