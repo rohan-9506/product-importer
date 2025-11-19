@@ -7,6 +7,8 @@ from .api import register_blueprints
 from .celery_app import celery, make_celery
 
 
+import os
+
 def create_app(config_name: str | None = None) -> Flask:
     load_dotenv()
     app = Flask(__name__)
@@ -21,11 +23,15 @@ def create_app(config_name: str | None = None) -> Flask:
     register_blueprints(app)
     make_celery(app)
 
+    upload_folder = app.config.get("UPLOAD_FOLDER", "/tmp")
+    os.makedirs(upload_folder, exist_ok=True)
+
     with app.app_context():
         from .extensions import db
         db.create_all()
 
     return app
+
 
 
 
