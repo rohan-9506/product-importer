@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from ..celery_app import celery
 from ..extensions import db
-from ..models import ImportJob, Product, Webhook
+from ..models import ImportJob, Product
 from ..services.webhook_dispatcher import dispatch_webhooks
 
 
@@ -27,7 +27,10 @@ def import_products_job(job_id: str):
         db.session.commit()
         return
 
-    dispatch_webhooks("product.import.started", {"job_id": job.job_id, "filename": job.filename})
+    dispatch_webhooks(
+        "product.import.started",
+        {"job_id": job.job_id, "filename": job.filename},
+    )
 
     try:
         total_rows = _count_rows(csv_path)
@@ -37,25 +40,38 @@ def import_products_job(job_id: str):
         with csv_path.open("r", newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
             batch = []
+
             for row in reader:
                 batch.append(_transform_row(row))
+
                 if len(batch) >= 1000:
                     _upsert_batch(batch)
                     batch = []
+
+                    # ---- IMPORTANT FIX ----
+                    db.session.expire_all()
                     job.processed_rows = (job.processed_rows or 0) + 1000
                     db.session.commit()
+
             if batch:
                 _upsert_batch(batch)
+                db.session.expire_all()
                 job.processed_rows = (job.processed_rows or 0) + len(batch)
                 db.session.commit()
 
         job.status = "completed"
         db.session.commit()
-        dispatch_webhooks("product.import.completed", {"job_id": job.job_id, "filename": job.filename})
-    except Exception as exc:  # noqa: BLE001
+
+        dispatch_webhooks(
+            "product.import.completed",
+            {"job_id": job.job_id, "filename": job.filename},
+        )
+
+    except Exception as exc:
         job.status = "failed"
         job.error_message = str(exc)
         db.session.commit()
+
         dispatch_webhooks(
             "product.import.failed",
             {"job_id": job.job_id, "filename": job.filename, "error": str(exc)},
@@ -72,6 +88,7 @@ def _transform_row(row: dict) -> dict:
     sku = row.get("sku") or row.get("SKU") or row.get("Sku")
     if not sku:
         raise ValueError("SKU column is required")
+
     return {
         "sku": sku.strip(),
         "sku_normalized": Product.normalize_sku(sku),
@@ -85,7 +102,9 @@ def _transform_row(row: dict) -> dict:
 def _upsert_batch(batch: list[dict]):
     if not batch:
         return
+
     stmt = insert(Product).values(batch)
+
     update_cols = {
         "sku": stmt.excluded.sku,
         "name": stmt.excluded.name,
@@ -94,7 +113,12 @@ def _upsert_batch(batch: list[dict]):
         "is_active": stmt.excluded.is_active,
         "sku_normalized": stmt.excluded.sku_normalized,
     }
-    stmt = stmt.on_conflict_do_update(index_elements=["sku_normalized"], set_=update_cols)
+
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["sku_normalized"],
+        set_=update_cols,
+    )
+
     db.session.execute(stmt)
     db.session.commit()
 
@@ -102,7 +126,7 @@ def _upsert_batch(batch: list[dict]):
 def _safe_decimal(value):
     try:
         return Decimal(str(value)) if value not in (None, "", "null") else None
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
