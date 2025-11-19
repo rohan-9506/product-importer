@@ -44,13 +44,13 @@ def import_products_job(job_id: str):
             for row in reader:
                 batch.append(_transform_row(row))
 
-                if len(batch) >= 1000:
+                if len(batch) >= 2000:
                     _upsert_batch(batch)
                     batch = []
 
                     # ---- IMPORTANT FIX ----
                     db.session.expire_all()
-                    job.processed_rows = (job.processed_rows or 0) + 1000
+                    job.processed_rows = (job.processed_rows or 0) + 2000
                     db.session.commit()
 
             if batch:
