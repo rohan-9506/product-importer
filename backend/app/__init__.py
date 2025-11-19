@@ -13,7 +13,7 @@ def create_app(config_name: str | None = None) -> Flask:
     configuration = get_config(config_name)
     app.config.from_object(configuration)
 
-    # Force eager mode for your free Render deployment
+    # Force eager mode for Render free tier
     app.config["CELERY_TASK_ALWAYS_EAGER"] = True
     app.config["CELERY_TASK_EAGER_PROPAGATES"] = True
 
@@ -21,7 +21,12 @@ def create_app(config_name: str | None = None) -> Flask:
     register_blueprints(app)
     make_celery(app)
 
+    with app.app_context():
+        from .extensions import db
+        db.create_all()
+
     return app
+
 
 
 def create_celery_app(app: Flask | None = None):
